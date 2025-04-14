@@ -29,4 +29,18 @@ int HammingDistance_Bytes(std::vector<unsigned char>& Bytes1, std::vector<unsign
 
 unsigned char Single_Byte_XOR_Attack_Key(const std::string& Ciphertext_Hex);
 
+std::vector<unsigned char> Read_And_Decode_base64_File(const std::string& filename);
+
+std::vector<unsigned char> base64_Decode(const std::string& Base64_Str);
+
+std::vector<unsigned char> aes_128_ecb_decrypt(const std::vector<unsigned char>& Ciphertext,
+    const std::vector<unsigned char>& Key);
+
+void PrintHex(const std::string& s);
+
+std::string PKCS_Padding(std::string Text, int Desired_Len);
+
+std::vector<unsigned char> aes_128_ecb_encrypt(const std::vector<unsigned char>& Plaintext,
+    const std::vector<unsigned char>& Key);
+
 #endif

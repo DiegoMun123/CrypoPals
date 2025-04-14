@@ -10,6 +10,7 @@
 #include <bitset> //to count 1 bits
 #include <cstdlib> //for system()
 #include <cstdio>  //for std::fopen
+#include <openssl/evp.h> //openssl 
 
 unsigned char HexCharToByte(char c) {
     if ('0' <= c && c <= '9') return c - '0';
@@ -22,6 +23,53 @@ const std::string base64_chars =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     "abcdefghijklmnopqrstuvwxyz"
     "0123456789+/";
+
+//read from b64 and return it as bytes
+std::vector<unsigned char> base64_Decode(const std::string& Base64_Str) {
+        std::vector<unsigned char> Decoded_Data;
+        
+        int val = 0, valb = -8;
+        for (size_t i = 0; i < Base64_Str.size(); i++) {
+            char c = Base64_Str[i];
+
+            if (c == '\n' || c == '\r' || c == ' ') //it stopped at each end of line
+            continue;
+            if (c == '=')
+                break; //this is the end
+            
+            int index = base64_chars.find(c);
+            if (index == std::string::npos) {
+                throw std::invalid_argument("Invalid Base64 character.");
+            }
+    
+            val = (val << 6) + index;
+            valb += 6;
+            
+            if (valb >= 0) {
+                Decoded_Data.push_back(static_cast<unsigned char>((val >> valb) & 0xFF));
+                valb -= 8;
+            }
+        }
+        return Decoded_Data; //bytes
+}
+
+
+
+std::vector<unsigned char> Read_And_Decode_base64_File(const std::string& filename) {
+    // Open the file
+    std::ifstream file(filename, std::ios::binary);
+    if (!file) {
+        throw std::runtime_error("Error: Unable to open file.");
+    }
+    std::string base64_str((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    file.close();
+
+    std::vector<unsigned char> Decoded_Bytes = base64_Decode(base64_str);
+
+    //return Bytes_To_Hex(decoded_bytes);    //return as hex
+    return Decoded_Bytes; //return as bytes
+}
+
 
 std::vector<unsigned char> HexToBytes(const std::string& Hex_String){
     std::vector<unsigned char> Bytes; 
@@ -45,6 +93,13 @@ int PrintBytesAsHex(std::vector<unsigned char> Bytes){
     return 0;
 }
 
+
+void PrintHex(const std::string& s) {
+    for (unsigned char c : s) {
+        std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)c << " ";
+    }
+    std::cout << std::dec << std::endl;
+}
 
 //XOR two hex strings
 std::vector<unsigned char> XOR(const std::string& Hex1,const std::string& Hex2){
@@ -207,6 +262,81 @@ int HammingDistance_Bytes(std::vector<unsigned char>& Bytes1, std::vector<unsign
     }
     return Distance;
 }  
+
+/*
+OpenSSL functions
+*/
+//using openssl, if I have time I will update it to my own implementation
+std::vector<unsigned char> aes_128_ecb_decrypt(const std::vector<unsigned char>& Ciphertext,
+    const std::vector<unsigned char>& Key)
+{
+    EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+    std::vector<unsigned char> Plaintext(Ciphertext.size() + 128);// + blocksize just in case it has padding
+    //it should not use padding, but we can leave it just in case
+    int len = 0, Plaintext_Len = 0;
+
+    EVP_DecryptInit_ex(ctx, EVP_aes_128_ecb(), nullptr, Key.data(), nullptr);
+    EVP_CIPHER_CTX_set_padding(ctx, 0);//no padding, just the ecb
+
+    EVP_DecryptUpdate(ctx, Plaintext.data(), &len, Ciphertext.data(), Ciphertext.size());
+    Plaintext_Len = len;
+
+    EVP_DecryptFinal_ex(ctx, Plaintext.data() + len, &len);
+    Plaintext_Len += len;
+
+    Plaintext.resize(Plaintext_Len);
+    EVP_CIPHER_CTX_free(ctx);
+    return Plaintext;
+}
+
+
+
+std::vector<unsigned char> aes_128_ecb_encrypt(const std::vector<unsigned char>& Plaintext,
+    const std::vector<unsigned char>& Key)
+{
+    EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+    std::vector<unsigned char> Ciphertext(Plaintext.size() + 128);// + blocksize just in case it has padding
+    //it should not use padding, but we can leave it just in case
+    int len = 0, Ciphertext_Len = 0;
+
+    EVP_EncryptInit_ex(ctx, EVP_aes_128_ecb(), nullptr, Key.data(), nullptr);
+    EVP_CIPHER_CTX_set_padding(ctx, 0);//no padding, just the ecb
+
+    EVP_EncryptUpdate(ctx, Ciphertext.data(), &len, Plaintext.data(), Plaintext.size());
+    Ciphertext_Len = len;
+
+    EVP_EncryptFinal_ex(ctx, Ciphertext.data() + len, &len);
+    Ciphertext_Len += len;
+
+    Ciphertext.resize(Ciphertext_Len);
+    EVP_CIPHER_CTX_free(ctx);
+    return Ciphertext;
+}
+
+/*
+PKCS padding for aes-cbc encryption
+*/
+std::string PKCS_Padding(std::string Text, int Desired_Len){
+    if(Text.length() > Desired_Len) throw std::invalid_argument("Desired len cannot be bigger than Text len");
+    if(Text.length() == Desired_Len){
+        return Text;
+    }
+
+    int Remaining = Desired_Len - Text.length();
+    char Remaining_Hex = static_cast<char>(Remaining);
+
+    for(size_t i = 0; i < Remaining; i++){
+        Text = Text + Remaining_Hex;
+    }
+    return Text;
+}
+
+
+
+
+
+
+
 
 /*
 Function to score a string based on how close it is to English (decrypted)
